@@ -1,0 +1,241 @@
+#include <iostream>
+#include <vector>
+#include <fstream>
+#include <string>
+#include <sstream>
+
+using namespace std;
+
+// ================= Base User Class ===================
+class User {
+protected:
+    string username;
+    string password;
+    string role;
+
+public:
+    User() {}
+    User(string uname, string pass, string r) : username(uname), password(pass), role(r) {}
+    string getUsername() const { return username; }
+    string getRole() const { return role; }
+
+    bool login(string uname, string pass) {
+        return (username == uname && password == pass);
+    }
+
+    virtual void menu() = 0;
+};
+
+// =============== Employee Class =======================
+class Employee {
+public:
+    int id;
+    string name, domain, username, status;
+
+    Employee() {}
+    Employee(int id, string name, string domain, string username, string status)
+        : id(id), name(name), domain(domain), username(username), status(status) {}
+
+    void display() {
+        cout << "ID: " << id << ", Name: " << name << ", Domain: " << domain << ", Status: " << status << endl;
+    }
+};
+
+// Global storage
+vector<User*> users;
+vector<Employee> employees;
+
+// ============== File Functions ====================
+void loadUsers() {
+    users.clear();
+    ifstream fin("users.txt");
+    string u, p, r;
+    while (fin >> u >> p >> r) {
+        if (r == "admin")
+            users.push_back(new class Admin(u, p));
+        else if (r == "manager")
+            users.push_back(new class Manager(u, p));
+        else if (r == "employee")
+            users.push_back(new class EmpUser(u, p));
+    }
+    fin.close();
+}
+
+void loadEmployees() {
+    employees.clear();
+    ifstream fin("employees.txt");
+    Employee emp;
+    while (fin >> emp.id >> emp.name >> emp.domain >> emp.username >> emp.status) {
+        employees.push_back(emp);
+    }
+    fin.close();
+}
+
+void saveUsers() {
+    ofstream fout("users.txt");
+    for (auto u : users) {
+        fout << u->getUsername() << " " << "password_hidden" << " " << u->getRole() << endl;
+        // In real usage, you'd store passwords too
+    }
+    fout.close();
+}
+
+void saveEmployees() {
+    ofstream fout("employees.txt");
+    for (auto& emp : employees) {
+        fout << emp.id << " " << emp.name << " " << emp.domain << " " << emp.username << " " << emp.status << endl;
+    }
+    fout.close();
+}
+
+// ============== Admin Class =========================
+class Admin : public User {
+public:
+    Admin(string u, string p) : User(u, p, "admin") {}
+
+    void menu() override {
+        int ch;
+        do {
+            cout << "\n--- Admin Menu ---\n";
+            cout << "1. Add Manager\n2. Add Employee\n3. Lock/Unlock Employee\n4. Back\n";
+            cin >> ch;
+            if (ch == 1) {
+                string uname, pass;
+                cout << "Enter manager username: ";
+                cin >> uname;
+                cout << "Enter password: ";
+                cin >> pass;
+                users.push_back(new Manager(uname, pass));
+                cout << "Manager added.\n";
+                saveUsers();
+            } else if (ch == 2) {
+                int id;
+                string name, domain, uname, pass;
+                cout << "Enter ID: ";
+                cin >> id;
+                cout << "Enter name: ";
+                cin >> name;
+                cout << "Enter domain: ";
+                cin >> domain;
+                cout << "Enter username: ";
+                cin >> uname;
+                cout << "Enter password: ";
+                cin >> pass;
+                employees.push_back(Employee(id, name, domain, uname, "active"));
+                users.push_back(new EmpUser(uname, pass));
+                saveUsers();
+                saveEmployees();
+                cout << "Employee added.\n";
+            } else if (ch == 3) {
+                int id;
+                cout << "Enter employee ID to lock/unlock: ";
+                cin >> id;
+                for (auto& emp : employees) {
+                    if (emp.id == id) {
+                        emp.status = (emp.status == "active" ? "locked" : "active");
+                        cout << "Status changed to " << emp.status << endl;
+                        saveEmployees();
+                        break;
+                    }
+                }
+            }
+        } while (ch != 4);
+    }
+};
+
+// ============== Manager Class =======================
+class Manager : public User {
+public:
+    Manager(string u, string p) : User(u, p, "manager") {}
+
+    void menu() override {
+        int ch;
+        do {
+            cout << "\n--- Manager Menu ---\n";
+            cout << "1. View All Employees\n2. Search Employee by ID\n3. Back\n";
+            cin >> ch;
+            if (ch == 1) {
+                for (auto& emp : employees)
+                    emp.display();
+            } else if (ch == 2) {
+                int id;
+                cout << "Enter employee ID: ";
+                cin >> id;
+                bool found = false;
+                for (auto& emp : employees) {
+                    if (emp.id == id) {
+                        emp.display();
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) cout << "Employee not found.\n";
+            }
+        } while (ch != 3);
+    }
+};
+
+// ============== EmpUser Class =======================
+class EmpUser : public User {
+public:
+    EmpUser(string u, string p) : User(u, p, "employee") {}
+
+    void menu() override {
+        for (auto& emp : employees) {
+            if (emp.username == username) {
+                if (emp.status == "locked") {
+                    cout << "You are locked. Contact admin.\n";
+                    return;
+                }
+                int ch;
+                do {
+                    cout << "\n--- Employee Menu ---\n";
+                    cout << "1. View Info\n2. Edit Name\n3. Back\n";
+                    cin >> ch;
+                    if (ch == 1)
+                        emp.display();
+                    else if (ch == 2) {
+                        cout << "Enter new name: ";
+                        cin.ignore();
+                        getline(cin, emp.name);
+                        saveEmployees();
+                        cout << "Name updated.\n";
+                    }
+                } while (ch != 3);
+            }
+        }
+    }
+};
+
+// ============== Main Function =======================
+int main() {
+    loadUsers();
+    loadEmployees();
+
+    int choice;
+    do {
+        cout << "\n=== MAIN MENU ===\n";
+        cout << "1. Login\n2. Exit\nEnter choice: ";
+        cin >> choice;
+        if (choice == 1) {
+            string uname, pass;
+            cout << "Username: ";
+            cin >> uname;
+            cout << "Password: ";
+            cin >> pass;
+            bool logged = false;
+            for (auto user : users) {
+                if (user->login(uname, pass)) {
+                    logged = true;
+                    user->menu();
+                    break;
+                }
+            }
+            if (!logged)
+                cout << "Invalid credentials.\n";
+        }
+    } while (choice != 2);
+
+    cout << "System exited.\n";
+    return 0;
+}
